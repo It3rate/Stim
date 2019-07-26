@@ -9,12 +9,15 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Stim.World;
 
+
 namespace Stim.Controls
 {
     public partial class WorldGridView : Control
     {
         public WorldGrid grid;
         const int colorCount = 100;
+        const int xWidth = 5;
+        const int yWidth = xWidth;
 
         private Color[] colors;
         private Pen[] pens;
@@ -24,10 +27,15 @@ namespace Stim.Controls
         public WorldGridView()
         {
             InitializeComponent();
+            Initialize();
+        }
+
+        private void Initialize()
+        {
             colors = new Color[colorCount];
             for (int i = 0; i < colorCount; i++)
             {
-                double v = (i+1) / (double)colorCount;
+                double v = (i + 1) / (double)colorCount;
                 colors[i] = Color.FromArgb(
                     (int)(v * 255),
                     (int)(v * 255),
@@ -46,12 +54,18 @@ namespace Stim.Controls
                 pens[i] = new Pen(colors[i], 2);
             }
         }
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            int x = e.X / xWidth;
+            int y = e.Y / yWidth;
+            grid.fastCircleAt(x, y, 30);
+            this.Invalidate();
+        }
 
         protected override void OnPaint(PaintEventArgs pe)
         {
             base.OnPaint(pe);
-            int xWidth = 5;
-            int yWidth = xWidth;
             Rectangle r = new Rectangle(0, 0, xWidth, yWidth);
             Brush[] brushList;
             for (int y = 0; y < WorldGrid.gridHeight; y++)
