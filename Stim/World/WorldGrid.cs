@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Hybridizer.Runtime.CUDAImports;
 
@@ -11,29 +12,65 @@ namespace Stim.World
 	{
         public int Width { get; private set; }
         public int Height { get; private set; }
+        public int ParamCount { get; private set; }
+        public int CurrentParam { get; private set; }
+        public bool IsPaused { get; set; }
 
-        private int[,] grid;
+        private int[,,] grid;
         private Random rnd = new Random(1234);
+        private CancellationTokenSource cancellationTokenSource;
 
         public WorldGrid(int width, int height)
         {
+            IsPaused = true;
             Width = width;
             Height = height;
-            grid = new int[width, height];
+            ParamCount = 4;
+            CurrentParam = 0;
+            grid = new int[width, height, ParamCount];
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    this[x, y] = rnd.Next(0,5);
+                    this[x, y] = rnd.Next(0, 5);
                 }
             }
             //circleAt(100, 100, 70);
             fastCircleAt(100, 100, 30);
+
+            cancellationTokenSource = new CancellationTokenSource();
+            new Task(() => RunLoop(), cancellationTokenSource.Token, TaskCreationOptions.LongRunning).Start();
         }
+        
         public int this[int x, int y]
         {
-            get { return grid[x, y]; }
-            set { grid[x, y] = value; }
+            get { return grid[x, y, CurrentParam]; }
+            set { grid[x, y, CurrentParam] = value; }
+        }
+
+        public void RunLoop()
+        {
+            IsPaused = false;
+            int loopIndex = 0;
+            while (!IsPaused)
+            {
+                Update();
+                Render();
+                loopIndex++;
+                if ((loopIndex % 1000) == 0)
+                {
+                    Console.WriteLine(" " + loopIndex);
+                    Thread.Sleep(1);
+                }
+            }
+        }
+        private void Update()
+        {
+
+        }
+        private void Render()
+        {
+
         }
 
         public void circleAt(int cx, int cy, int r)
