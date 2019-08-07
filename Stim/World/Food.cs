@@ -16,3 +16,4 @@ namespace Stim.World
         public bool IsBreeding { get; }
     }
 }
+            

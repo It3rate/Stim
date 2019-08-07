@@ -35,7 +35,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup>
-    <StartupObject>Stim.Program</StartupObject>
+    <StartupObject>fluid_mac.MainForm</StartupObject>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
@@ -102,6 +102,9 @@
     <Compile Include="DirectBitmap.cs" />
     <Compile Include="Entities\Animate.cs" />
     <Compile Include="Entities\BaseEntity.cs" />
+    <Compile Include="Fluid\Fluid.cs" />
+    <Compile Include="Fluid\Fluid.Designer.cs" />
+    <Compile Include="Fluid\Vector.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="World\Bacteria.cs" />
