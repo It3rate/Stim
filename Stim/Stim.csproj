@@ -104,6 +104,7 @@
     <Compile Include="Entities\BaseEntity.cs" />
     <Compile Include="Fluid\Fluid.cs" />
     <Compile Include="Fluid\Fluid.Designer.cs" />
+    <Compile Include="Fluid\FluidWorld.cs" />
     <Compile Include="Fluid\Vector.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
