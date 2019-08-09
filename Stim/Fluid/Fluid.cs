@@ -4,80 +4,91 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace fluid_mac
+namespace Stim.Fluid
 {
     public class FluidSolver
     {
+        Thread thread;
+        public bool quit = false;
+        FluidControl fluidControl;
+
         public double[,] vx;
         public double[,] vy;
         public double[,] dye;
         //pressure is stored to provide a good initial 
         // guess for iteration methods
         public double[,] pressure;
-        public bool[,] surface;
-        public bool[,] fluid;
         public bool[,] boundary;
-        private int i, j;
         public double dt = 0.1;
-        public double eps1 = 0.01f;
-        public double eps2 = 0.02f;
         public int n = 64;//32;
-        public double visc = 0;// 0.0000001;
-        public int maxiter = 120;
-        public double minerr = 1e-5;
-        public double dw, idw; //idw=1/dw
+        public double visc = 0.0000001;
+        public int maxiter = 4; // 120
+        public double minerr = 1e-3;
+        public double dw, idw;
+
         public Random rnd = new Random(1234);
+        public double gravityX = 0.0;
+        public double gravityY = -0.1;
         public double t;
         public Vector[] animals;
+        public int animalCount = 30;
+
+        public FluidSolver(FluidControl fluidControl)
+        {
+            this.fluidControl = fluidControl;
+            fluidControl.Solver = this;
+            Initialize();
+
+            thread = new Thread(this.ThreadStart);
+            thread.Start();
+        }
+
+        void ThreadStart()
+        {
+            while (!quit)
+            {
+                Step();
+                if (fluidControl != null)
+                {
+                    fluidControl.Invoke((MethodInvoker)delegate {
+                        fluidControl.fluidRender.Invalidate();
+                    });
+                }
+                Thread.Sleep(5);
+            }
+        }
+
+        public void OnClose() 
+        {
+            quit = true;
+            thread.Join();
+        }
+
 
         public void Initialize()
         {
-            vx = new double[n + 1, n];
-            vy = new double[n, n + 1];
-            dye = new double[n, n];
-            pressure = new double[n, n];
-            surface = new bool[n, n];
+            vx = new double[n + 1, n]; // 0.0s
+            vy = new double[n, n + 1]; // 0.0s
+            dye = new double[n, n]; // 0.0s
+            pressure = new double[n, n]; // 0.0s
             boundary = new bool[n, n];
-            fluid = new bool[n, n];
+            animals = new Vector[animalCount];
 
-            double speedUp = 3.0;
+            double speedUp = 1.0; // 3.0
             dw = 1.0 / (n * speedUp);
             idw = 1.0 / dw;
+
+
+            int i, j;
             for (i = 0; i < n; i++)
             {
                 for (j = 0; j < n; j++)
                 {
-                    if ((i == 0) || (i == n - 1) || (j == 0) || (j == n - 1))
-                    {
-                        boundary[i, j] = true;
-                    }
-                    else
-                    {
-                        boundary[i, j] = false;
-                    }
-                    surface[i, j] = false;
-                    fluid[i, j] = true;
-                    dye[i, j] = 0.0;
-                    pressure[i, j] = 0.0;
-                }
-            }
-            for (i = 0; i < n + 1; i++)
-            {
-                for (j = 0; j < n; j++)
-                {
-                    vx[i, j] = 0.0;
-                }
-            }
-            for (i = 0; i < n; i++)
-            {
-                for (j = 0; j < n + 1; j++)
-                {
-                    vy[i, j] = 0.0;
+                    boundary[i, j] = ((i == 0) || (i == n - 1) || (j == 0) || (j == n - 1));
                 }
             }
 
-            animals = new Vector[20];
-            for (int i = 0; i < animals.Length; i++)
+            for (i = 0; i < animals.Length; i++)
             {
                 animals[i] = new Vector(rnd.Next(n - 4) + 2, rnd.Next(n - 4) + 2, 0);
             }
@@ -86,16 +97,12 @@ namespace fluid_mac
         public void set_bounds_x(double[,] vxnew)
         {
             int i, j;
-            for (i = 0; i < n + 1; i++)
+            for (i = 1; i < n - 1; i++)
             {
                 for (j = 0; j < n; j++)
                 {
-                    if (i - 1 >= 0)
-                        if (boundary[i - 1, j])
-                            vxnew[i, j] = 0.0;
-                    if (i + 1 < n)
-                        if (boundary[i + 1, j])
-                            vxnew[i, j] = 0.0;
+                    if (boundary[i - 1, j]) vxnew[i, j] = 0.0;
+                    if (boundary[i + 1, j]) vxnew[i, j] = 0.0;
                 }
             }
         }
@@ -105,41 +112,16 @@ namespace fluid_mac
             int i, j;
             for (i = 0; i < n; i++)
             {
-                for (j = 0; j < n + 1; j++)
+                for (j = 1; j < n - 1; j++)
                 {
-                    if (j - 1 >= 0)
-                        if (boundary[i, j - 1])
-                            vynew[i, j] = 0.0;
-                    if (j + 1 < n)
-                        if (boundary[i, j + 1])
-                            vynew[i, j] = 0.0;
+                    if (boundary[i, j - 1]) vynew[i, j] = 0.0;
+                    if (boundary[i, j + 1]) vynew[i, j] = 0.0;
                 }
             }
         }
 
         public void vel_diffuse()
         {
-            //int dist = 3;
-            //double scale = 3000.0;
-            //pressure[dist, n - dist] = scale;
-            //pressure[dist, dist] = scale;
-            //pressure[n - dist, dist] = scale;
-            //pressure[n - dist, n - dist] = scale;
-            t += 0.01;
-            vx[13, 13] = (Math.Sin(t)) * 0.2 + 0.15;//rnd.NextDouble() * 0.05 + 0.2;
-            vy[13, 13] = (Math.Cos(t)) * 0.2 + 0.18;// rnd.NextDouble() * 0.05 + 0.175;
-            if (rnd.NextDouble() < 0.1)
-            {
-                int rx = rnd.Next((int)(n * 0.8) + (int)(n * 0.1)) + 1;
-                vx[rx, n - 3] = rnd.NextDouble() * 0.5 - 0.15;
-                vy[rx, n - 3] = rnd.NextDouble() * 4.0 - 4.0;
-            }
-            //boundary[20, 20] = true;
-            //boundary[21, 20] = true;
-            //boundary[22, 20] = true;
-            //boundary[20, 21] = true;
-            //boundary[20, 22] = true;
-
             double a = dt * visc * idw * idw;
             double c = 1 + 4.0f * a;
             double diff = 10.0f;
@@ -152,6 +134,7 @@ namespace fluid_mac
 
             //gauss seidel
             //initial guess is current velocities
+            int i, j;
             for (i = 0; i < n + 1; i++)
             {
                 for (j = 0; j < n; j++)
@@ -214,7 +197,7 @@ namespace fluid_mac
             vx = vxnew;
             vy = vynew;
 
-            for (int i = 0; i < animals.Length; i++)
+            for (i = 0; i < animals.Length; i++)
             {
                 Vector animal = animals[i];
                 int ax = Math.Max(0, Math.Min(n - 1, (int)animal.x));
@@ -240,6 +223,7 @@ namespace fluid_mac
             double temp;
 
             //initial guess is current values
+            int i, j;
             for (i = 0; i < n; i++)
             {
                 for (j = 0; j < n; j++)
@@ -286,6 +270,7 @@ namespace fluid_mac
 
             //x and y velocities are done in two steps
             //first x
+            int i, j;
             for (i = 0; i < n + 1; i++)
             {
                 for (j = 0; j < n; j++)
@@ -353,6 +338,7 @@ namespace fluid_mac
             double temp;
             double[,] dyenew;
             dyenew = new double[n, n];
+            int i, j;
             for (i = 0; i < n; i++)
             {
                 for (j = 0; j < n; j++)
@@ -388,6 +374,7 @@ namespace fluid_mac
             double[,] pressurenew;
             pressurenew = new double[n, n];
 
+            int i, j;
             for (i = 0; i < n; i++)
             {
                 for (j = 0; j < n; j++)
@@ -447,87 +434,225 @@ namespace fluid_mac
             set_bounds_y(vy);
         }
 
-        public void force()
+        public void externalForces()
         {
-            for (i = 0; i < n; i++)
+            t += 0.04;
+            vx[13, 13] = (Math.Sin(t)) * 0.2 + 0.15;//rnd.NextDouble() * 0.05 + 0.2;
+            vy[13, 13] = (Math.Cos(t)) * 0.2 + 0.18;// rnd.NextDouble() * 0.05 + 0.175;
+            if (rnd.NextDouble() < 0.1)
             {
-                for (j = 0; j < n; j++)
-                {
-                    if (fluid[i, j])
-                    {
-                        vy[i, j + 1] += 0.03f * dt;
-                    }
-                }
+                int rx = rnd.Next((int)(n * 0.8) + (int)(n * 0.1)) + 1;
+                vx[rx, n - 3] = rnd.NextDouble() * 0.5 - 0.15;
+                vy[rx, n - 3] = rnd.NextDouble() * 4.0 - 4.0;
             }
-        }
 
-        public void dense_step()
-        {
-            dense_diffuse();
-            dense_advect();
+            //int i, j;
+            //for (i = 0; i < n; i++)
+            //{
+            //    for (j = 0; j < n; j++)
+            //    {
+            //        if (!boundary[i, j])
+            //        {
+            //            vx[i, j] += gravityX * dt;
+            //            vy[i, j] += gravityY * dt;
+            //        }
+            //    }
+            //}
         }
-
-        public void vel_step()
+        
+        public void Step()
         {
             vel_diffuse();
             project();
             vel_advect();
-            //force();
+            externalForces();
             project();
-            //set_bounds();
-        }
 
-        public void RunFluid()
-        {
-            //set_bounds();
-            vel_step();
-            dense_step();
+            dense_diffuse();
+            dense_advect();
         }
     }
+
+
+
+
+
+
+    /*
     /// <summary>
     /// Description of MainForm.
     /// </summary>
-    public partial class MainForm
+    public partial class FluidForm
     {
         public FluidSolver fl;
         Thread thread;
         public bool quit = false;
+
+        public int startX;
+        public int startY;
+        public int mouseX;
+        public int mouseY;
+        public bool isMoving = false;
+        public bool isLeftDown = false;
+        public bool isRightDown = false;
+
         [STAThread]
         public static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            Application.Run(new FluidForm());
         }
 
         void ThreadStart()
         {
             while (!quit)
             {
+                fl.Step();
                 PicFluid.Invalidate();
-                Thread.Sleep(10);
+                Thread.Sleep(5);
             }
         }
 
 
-        public MainForm()
+        public FluidForm()
         {
-            //
-            // The InitializeComponent() call is required for Windows Forms designer support.
-            //
             InitializeComponent();
-
-            //
-            // TODO: Add constructor code after the InitializeComponent() call.
-            //
             fl = new FluidSolver();
             fl.Initialize();
-            //rnd=new Random();		
+
             thread = new Thread(this.ThreadStart);
             thread.Start();
         }
 
-        void Draw(Graphics gfx, double x, double y, double r, double g, double b)
+        void FluidFormFormClosed(object sender, FormClosedEventArgs e)
+        {
+            quit = true;
+            thread.Join();
+        }
+
+        #region Mouse
+        void PicFluidMouseDown(object sender, MouseEventArgs e)
+        {
+            startX = (int)(fl.n * e.X / PicFluid.Width);
+            startY = (int)(fl.n * e.Y / PicFluid.Height);
+            mouseX = startX;
+            mouseY = startY;
+
+            if (e.Button == MouseButtons.Middle)
+            {
+                fl.boundary[mouseX, mouseY] = true;
+                fl.dye[mouseX, mouseY] = 0;
+                isRightDown = false;
+                isLeftDown = false;
+            }
+
+            if (e.Button == MouseButtons.Left)
+            {
+                isLeftDown = true;
+            }
+            else
+            {
+                isRightDown = false;
+            }
+            if (e.Button == MouseButtons.Right)
+            {
+                isRightDown = true;
+            }
+            else
+            {
+                isRightDown = false;
+            }
+            PicFluid.Invalidate();
+        }
+
+        void PicFluidMouseMove(object sender, MouseEventArgs e)
+        {
+            int x = e.X < 0 ? 0 : e.X >= PicFluid.Width ? PicFluid.Width - 1 : e.X;
+            int y = e.Y < 0 ? 0 : e.Y >= PicFluid.Height ? PicFluid.Height - 1 : e.Y;
+            mouseX = (int)(fl.n * x / PicFluid.Width);
+            mouseY = (int)(fl.n * y / PicFluid.Height);
+            isMoving = true;
+
+            if (e.Button == MouseButtons.Middle)
+            {
+                fl.boundary[mouseX, mouseY] = true;
+                fl.dye[mouseX, mouseY] = 0;
+                isRightDown = false;
+                isLeftDown = false;
+            }
+
+            if (e.Button == MouseButtons.Left)
+            {
+                isLeftDown = true;
+            }
+            else
+            {
+                isRightDown = false;
+            }
+            if (e.Button == MouseButtons.Right)
+            {
+                isRightDown = true;
+            }
+            else
+            {
+                isRightDown = false;
+            }
+            PicFluid.Invalidate();
+
+        }
+
+        void PicFluidMouseUp(object sender, MouseEventArgs e)
+        {
+            startX = (int)(fl.n * e.X / PicFluid.Width);
+            startY = (int)(fl.n * e.Y / PicFluid.Height);
+            mouseX = startX;
+            mouseY = startY;
+            isLeftDown = false;
+            isRightDown = false;
+            isMoving = false;
+            PicFluid.Invalidate();
+        }
+        #endregion
+
+        #region Paint
+        void PicFluidPaint(object sender, PaintEventArgs e)
+        {
+            int i, j;
+            double d;
+            Vector v;
+            if ((mouseX != startX) || (mouseY != startY))
+            {
+                if (isLeftDown) fl.vx[mouseX, mouseY] += (mouseX - startX) * 1300.0 * fl.dw / PicFluid.Width;
+                if (isLeftDown) fl.vy[mouseX, mouseY] += (mouseY - startY) * 1300.0 * fl.dw / PicFluid.Height;
+            }
+            if (isRightDown) fl.dye[mouseX, mouseY] += 45.0f;
+
+            for (i = 0; i < fl.n; i++)
+            {
+                for (j = 0; j < fl.n; j++)
+                {
+                    d = fl.dye[i, j] / 10.0;
+                    if (d < 0.0) d = 0.0;
+                    if (d > 1.0) d = 1.0;
+                    if (fl.boundary[i, j])
+                        DrawBoundryBlock(e.Graphics, i, j, 0.0, 0.2, 0.5);
+                    else
+                        DrawBoundryBlock(e.Graphics, i, j, d, d, d / 4.0);
+                    v = new Vector(0.5 * (fl.vx[i, j] + fl.vx[i + 1, j]),
+                                 0.5 * (fl.vy[i, j] + fl.vy[i, j + 1]), 0);
+                    DrawVelocity(e.Graphics, i, j, v, 0.1, 0.0, 0.4);
+                }
+            }
+            float pxw = PicFluid.Width / fl.n;
+            float pxh = PicFluid.Height / fl.n;
+            for (i = 0; i < fl.animals.Length; i++)
+            {
+                e.Graphics.FillEllipse(Brushes.White, (float)fl.animals[i].x * pxw, (float)fl.animals[i].y * pxh, 10, 10);
+            }
+        }
+
+        void DrawBoundryBlock(Graphics gfx, double x, double y, double r, double g, double b)
         {
             Pen pen = new Pen(Brushes.Black);
             pen.Color = Color.FromArgb(255, (int)(r * 255), (int)(g * 255), (int)(b * 255));
@@ -539,7 +664,7 @@ namespace fluid_mac
             gfx.FillRectangle(brush, rx, ry, w, h);
         }
 
-        void DrawVector(Graphics gfx, double x, double y, Vector v, double r, double g, double b)
+        void DrawVelocity(Graphics gfx, double x, double y, Vector v, double r, double g, double b)
         {
             Pen pen = new Pen(Brushes.Black);
             float rx = (float)(x + 0.5f) / fl.n * PicFluid.Width;
@@ -553,134 +678,7 @@ namespace fluid_mac
 
             gfx.DrawLine(pen, rx, ry, rx + (float)v.x * 500.0f, ry + (float)v.y * 500.0f);
         }
-
-        public int ox;
-        public int oy;
-        public int mx;
-        public int my;
-        public bool left = false;
-        public bool right = false;
-
-        void MainFormFormClosed(object sender, FormClosedEventArgs e)
-        {
-            quit = true;
-            thread.Join();
-        }
-
-        void PicFluidMouseDown(object sender, MouseEventArgs e)
-        {
-            ox = (int)(fl.n * e.X / PicFluid.Width);
-            oy = (int)(fl.n * e.Y / PicFluid.Height);
-            mx = ox;
-            my = oy;
-
-            if (e.Button == MouseButtons.Middle)
-            {
-                fl.boundary[mx, my] = true;
-                fl.dye[mx, my] = 0;
-                right = false;
-                left = false;
-            }
-
-            if (e.Button == MouseButtons.Left)
-            {
-                left = true;
-            }
-            else
-            {
-                right = false;
-            }
-            if (e.Button == MouseButtons.Right)
-            {
-                right = true;
-            }
-            else
-            {
-                right = false;
-            }
-            PicFluid.Invalidate();
-        }
-
-        void PicFluidMouseMove(object sender, MouseEventArgs e)
-        {
-            int x = e.X < 0 ? 0 : e.X >= PicFluid.Width ? PicFluid.Width - 1 : e.X;
-            int y = e.Y < 0 ? 0 : e.Y >= PicFluid.Height ? PicFluid.Height - 1 : e.Y;
-            mx = (int)(fl.n * x / PicFluid.Width);
-            my = (int)(fl.n * y / PicFluid.Height);
-
-            if (e.Button == MouseButtons.Middle)
-            {
-                fl.boundary[mx, my] = true;
-                fl.dye[mx, my] = 0;
-                right = false;
-                left = false;
-            }
-
-            if (e.Button == MouseButtons.Left)
-            {
-                left = true;
-            }
-            else
-            {
-                right = false;
-            }
-            if (e.Button == MouseButtons.Right)
-            {
-                right = true;
-            }
-            else
-            {
-                right = false;
-            }
-            PicFluid.Invalidate();
-
-        }
-
-        void PicFluidMouseUp(object sender, MouseEventArgs e)
-        {
-            ox = (int)(fl.n * e.X / PicFluid.Width);
-            oy = (int)(fl.n * e.Y / PicFluid.Height);
-            mx = ox;
-            my = oy;
-            left = false;
-            right = false;
-            PicFluid.Invalidate();
-        }
-
-        void PicFluidPaint(object sender, PaintEventArgs e)
-        {
-            int i, j;
-            double d;
-            Vector v;
-            if ((mx != ox) || (my != oy))
-            {
-                if (left) fl.vx[mx, my] += (mx - ox) * 1300.0 * fl.dw / PicFluid.Width;
-                if (left) fl.vy[mx, my] += (my - oy) * 1300.0 * fl.dw / PicFluid.Height;
-            }
-            if (right) fl.dye[mx, my] += 45.0f;
-            fl.RunFluid();
-            for (i = 0; i < fl.n; i++)
-            {
-                for (j = 0; j < fl.n; j++)
-                {
-                    d = fl.dye[i, j] / 10.0;
-                    if (d < 0.0) d = 0.0;
-                    if (d > 1.0) d = 1.0;
-                    if (fl.boundary[i, j])
-                        Draw(e.Graphics, i, j, 0.0, 0.2, 0.5);
-                    else
-                        Draw(e.Graphics, i, j, d, d, d / 4.0);
-                    v = new Vector(0.5 * (fl.vx[i, j] + fl.vx[i + 1, j]),
-                                 0.5 * (fl.vy[i, j] + fl.vy[i, j + 1]), 0);
-                    DrawVector(e.Graphics, i, j, v, 0.1, 0.0, 0.4);
-                }
-            }
-            float pxw = PicFluid.Width / fl.n;
-            float pxh = PicFluid.Height / fl.n;
-            for (i = 0; i < fl.animals.Length; i++)
-            {
-                e.Graphics.FillEllipse(Brushes.White, (float)fl.animals[i].x * pxw, (float)fl.animals[i].y * pxh, 10, 10);
-            }
-        }
+        #endregion
     }
+    */
 }

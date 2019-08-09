@@ -35,7 +35,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup>
-    <StartupObject>fluid_mac.MainForm</StartupObject>
+    <StartupObject>
+    </StartupObject>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
@@ -104,6 +105,12 @@
     <Compile Include="Entities\BaseEntity.cs" />
     <Compile Include="Fluid\Fluid.cs" />
     <Compile Include="Fluid\Fluid.Designer.cs" />
+    <Compile Include="Fluid\FluidControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Fluid\FluidControl.Designer.cs">
+      <DependentUpon>FluidControl.cs</DependentUpon>
+    </Compile>
     <Compile Include="Fluid\FluidWorld.cs" />
     <Compile Include="Fluid\Vector.cs" />
     <Compile Include="Program.cs" />
@@ -116,6 +123,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Controls\WorldBitmapView.resx">
       <DependentUpon>WorldBitmapView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Fluid\FluidControl.resx">
+      <DependentUpon>FluidControl.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
