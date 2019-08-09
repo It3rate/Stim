@@ -26,16 +26,16 @@ namespace Stim.Fluid
         public double dw, idw;
 
         public double gravityX = 0.0;
-        public double gravityY = -0.1;
+        public double gravityY = 0.0; // -0.1;
         public double t;
         public Vector[] animals;
         public int animalCount = 30;
 
         private Random rnd = new Random(1234);
-        private double[,] vxnew;
-        private double[,] vynew;
-        private double[,] pressurenew;
-        private double[,] dyenew;
+        private double[,] vxTemp;
+        private double[,] vyTemp;
+        private double[,] pressureTemp;
+        private double[,] dyeTemp;
         private const int DOUBLE_SIZE = 8;
 
         public FluidSolver(FluidControl fluidControl)
@@ -59,13 +59,14 @@ namespace Stim.Fluid
                         fluidControl.fluidRender.Invalidate();
                     });
                 }
-                Thread.Sleep(5);
+                //Thread.Sleep(1);
             }
         }
 
         public void OnClose() 
         {
             quit = true;
+            thread.Abort();
             thread.Join();
         }
 
@@ -79,10 +80,10 @@ namespace Stim.Fluid
             boundary = new bool[n, n];
             animals = new Vector[animalCount];
 
-            vxnew = (double[,])vx.Clone();
-            vynew = (double[,])vy.Clone();
-            dyenew = (double[,])dye.Clone();
-            pressurenew = (double[,])pressure.Clone();
+            vxTemp = (double[,])vx.Clone();
+            vyTemp = (double[,])vy.Clone();
+            dyeTemp = (double[,])dye.Clone();
+            pressureTemp = (double[,])pressure.Clone();
 
             dw = 1.0 / n;
             idw = n - 2;// 1.0 / dw;
@@ -103,28 +104,28 @@ namespace Stim.Fluid
             }
         }
 
-        public void SetBoundsX(double[,] vxnew)
+        public void SetBoundsX(double[,] vxRef)
         {
             int i, j;
             for (i = 1; i < n - 1; i++)
             {
                 for (j = 0; j < n; j++)
                 {
-                    if (boundary[i - 1, j]) vxnew[i, j] = 0.0;
-                    if (boundary[i + 1, j]) vxnew[i, j] = 0.0;
+                    if (boundary[i - 1, j]) vxRef[i, j] = 0.0;
+                    if (boundary[i + 1, j]) vxRef[i, j] = 0.0;
                 }
             }
         }
 
-        public void SetBoundsY(double[,] vynew)
+        public void SetBoundsY(double[,] vyRef)
         {
             int i, j;
             for (i = 0; i < n; i++)
             {
                 for (j = 1; j < n - 1; j++)
                 {
-                    if (boundary[i, j - 1]) vynew[i, j] = 0.0;
-                    if (boundary[i, j + 1]) vynew[i, j] = 0.0;
+                    if (boundary[i, j - 1]) vyRef[i, j] = 0.0;
+                    if (boundary[i, j + 1]) vyRef[i, j] = 0.0;
                 }
             }
         }
@@ -139,8 +140,8 @@ namespace Stim.Fluid
 
             //gauss seidel
             //initial guess is current velocities
-            Buffer.BlockCopy(vx, 0, vxnew, 0, vx.Length * DOUBLE_SIZE);
-            Buffer.BlockCopy(vy, 0, vynew, 0, vy.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vx, 0, vxTemp, 0, vx.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vy, 0, vyTemp, 0, vy.Length * DOUBLE_SIZE);
 
             //x and y velocities are done in two steps
             //first x
@@ -151,17 +152,18 @@ namespace Stim.Fluid
                 {
                     for (int j = 1; j < n - 1; j++)
                     {
-                        dv = vxnew[i, j];
-                        vxnew[i, j] = (vx[i, j] +
-                            a * (vxnew[i - 1, j] +
-                            vxnew[i + 1, j] +
-                            vxnew[i, j - 1] +
-                            vxnew[i, j + 1])) / c;
-                        dv -= vxnew[i, j];
+                        dv = vxTemp[i, j];
+                        vxTemp[i, j] = (vx[i, j] +
+                            a * (
+                            vxTemp[i - 1, j] +
+                            vxTemp[i + 1, j] +
+                            vxTemp[i, j - 1] +
+                            vxTemp[i, j + 1] )) / c;
+                        dv -= vxTemp[i, j];
                         diff += dv * dv;
                     }
                 }
-                SetBoundsX(vxnew);
+                SetBoundsX(vxTemp);
             }
 
             diff = 10.0f;
@@ -174,20 +176,21 @@ namespace Stim.Fluid
                 {
                     for (int j = 1; j < n; j++)
                     {
-                        dv = vynew[i, j];
-                        vynew[i, j] = (vy[i, j] +
-                            a * (vynew[i - 1, j] +
-                            vynew[i + 1, j] +
-                            vynew[i, j - 1] +
-                            vynew[i, j + 1])) / c;
-                        dv -= vxnew[i, j];
+                        dv = vyTemp[i, j];
+                        vyTemp[i, j] = (vy[i, j] +
+                            a * (
+                            vyTemp[i - 1, j] +
+                            vyTemp[i + 1, j] +
+                            vyTemp[i, j - 1] +
+                            vyTemp[i, j + 1] )) / c;
+                        dv -= vxTemp[i, j];
                         diff += dv * dv;
                     }
                 }
-                SetBoundsY(vynew);
+                SetBoundsY(vyTemp);
             }
-            Buffer.BlockCopy(vxnew, 0, vx, 0, vx.Length * DOUBLE_SIZE);
-            Buffer.BlockCopy(vynew, 0, vy, 0, vy.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vxTemp, 0, vx, 0, vx.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vyTemp, 0, vy, 0, vy.Length * DOUBLE_SIZE);
 
             for (int i = 0; i < animals.Length; i++)
             {
@@ -213,7 +216,7 @@ namespace Stim.Fluid
             double temp;
             
             //initial guess is current values
-            Buffer.BlockCopy(dye, 0, dyenew, 0, dye.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(dye, 0, dyeTemp, 0, dye.Length * DOUBLE_SIZE);
 
             //gauss seidel
             while ((diff > minerr) && (0 < iter--))
@@ -223,20 +226,20 @@ namespace Stim.Fluid
                 {
                     for (int j = 1; j < n - 1; j++)
                     {
-                        dd = dyenew[i, j];
+                        dd = dyeTemp[i, j];
                         temp = (dye[i, j] +
-                            a * (dyenew[i - 1, j] +
-                            dyenew[i + 1, j] +
-                            dyenew[i, j - 1] +
-                            dyenew[i, j + 1])) / c;
+                            a * (dyeTemp[i - 1, j] +
+                            dyeTemp[i + 1, j] +
+                            dyeTemp[i, j - 1] +
+                            dyeTemp[i, j + 1])) / c;
                         temp = Math.Min(999, Math.Max(0, temp)) * 0.999;
-                        dyenew[i, j] = temp;
+                        dyeTemp[i, j] = temp;
                         dd -= temp;
                         diff += dd * dd;
                     }
                 }
             }
-            Buffer.BlockCopy(dyenew, 0, dye, 0, dye.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(dyeTemp, 0, dye, 0, dye.Length * DOUBLE_SIZE);
         }
 
         public void AdvectVelocity()
@@ -247,8 +250,7 @@ namespace Stim.Fluid
             double s1, s2, t1, t2, viy, vix;
             double dt0 = dt * idw;
             Vector v;
-            //x and y velocities are done in two steps
-            //first x
+
             for (int i = 0; i < n + 1; i++)
             {
                 for (int j = 0; j < n; j++)
@@ -269,12 +271,12 @@ namespace Stim.Fluid
 
                     s1 = (double)from.x - x1; s2 = 1.0f - s1;
                     t1 = (double)from.y - y1; t2 = 1.0f - t1;
-                    vxnew[i, j] =
+                    vxTemp[i, j] =
                         t1 * (s1 * vx[x2, y2] + s2 * vx[x1, y2]) +
                         t2 * (s1 * vx[x2, y1] + s2 * vx[x1, y1]);
                 }
             }
-            //then y
+
             for (int i = 0; i < n; i++)
             {
                 for (int j = 0; j < n + 1; j++)
@@ -295,13 +297,13 @@ namespace Stim.Fluid
                     
                     s1 = (double)from.x - x1; s2 = 1.0f - s1;
                     t1 = (double)from.y - y1; t2 = 1.0f - t1;
-                    vynew[i, j] =
+                    vyTemp[i, j] =
                         t1 * (s1 * vy[x2, y2] + s2 * vy[x1, y2]) +
                         t2 * (s1 * vy[x2, y1] + s2 * vy[x1, y1]);
                 }
             }
-            Buffer.BlockCopy(vxnew, 0, vx, 0, vx.Length * DOUBLE_SIZE);
-            Buffer.BlockCopy(vynew, 0, vy, 0, vy.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vxTemp, 0, vx, 0, vx.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(vyTemp, 0, vy, 0, vy.Length * DOUBLE_SIZE);
             SetBoundsX(vx);
             SetBoundsY(vy);
         }
@@ -334,10 +336,10 @@ namespace Stim.Fluid
                     temp = t1 * (s1 * dye[x2, y2] + s2 * dye[x1, y2]) +
                         t2 * (s1 * dye[x2, y1] + s2 * dye[x1, y1]);
                     temp = Math.Min(99, Math.Max(0, temp));
-                    dyenew[i, j] = temp;
+                    dyeTemp[i, j] = temp;
                 }
             }
-            Buffer.BlockCopy(dyenew, 0, dye, 0, dye.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(dyeTemp, 0, dye, 0, dye.Length * DOUBLE_SIZE);
         }
 
         public void Project()
@@ -347,9 +349,8 @@ namespace Stim.Fluid
             double diff = 10.0;
             double dp;
             int iter = maxiter;
-
-            //pressurenew = new double[n, n];
-            Buffer.BlockCopy(pressure, 0, pressurenew, 0, pressure.Length * DOUBLE_SIZE);
+     
+            Buffer.BlockCopy(pressure, 0, pressureTemp, 0, pressure.Length * DOUBLE_SIZE);
 
             //compute b=grad.w
             //b will be stored in pressure
@@ -369,19 +370,18 @@ namespace Stim.Fluid
                 {
                     for (int j = 1; j < n - 1; j++)
                     {
-                        dp = pressurenew[i, j];
-                        pressurenew[i, j] = (pressure[i, j] +
-                            a * (pressurenew[i - 1, j] +
-                            pressurenew[i + 1, j] +
-                            pressurenew[i, j - 1] +
-                            pressurenew[i, j + 1])) / c;
-                        dp -= pressurenew[i, j];
+                        dp = pressureTemp[i, j];
+                        pressureTemp[i, j] = (pressure[i, j] +
+                            a * (pressureTemp[i - 1, j] +
+                            pressureTemp[i + 1, j] +
+                            pressureTemp[i, j - 1] +
+                            pressureTemp[i, j + 1])) / c;
+                        dp -= pressureTemp[i, j];
                         diff += dp * dp;
                     }
                 }
-                //set_bounds();
             }
-            Buffer.BlockCopy(pressurenew, 0, pressure, 0, pressure.Length * DOUBLE_SIZE);
+            Buffer.BlockCopy(pressureTemp, 0, pressure, 0, pressure.Length * DOUBLE_SIZE);
 
             for (int i = 1; i < n; i++)
             {
@@ -405,7 +405,7 @@ namespace Stim.Fluid
 
         public void ApplyExternalForces()
         {
-            t += 0.04;
+            t += 0.03;
             vx[13, 13] = (Math.Sin(t)) * 0.2 + 0.15;//rnd.NextDouble() * 0.05 + 0.2;
             vy[13, 13] = (Math.Cos(t)) * 0.2 + 0.18;// rnd.NextDouble() * 0.05 + 0.175;
             if (rnd.NextDouble() < 0.1)
@@ -414,18 +414,19 @@ namespace Stim.Fluid
                 vx[rx, n - 3] = rnd.NextDouble() * 0.5 - 0.15;
                 vy[rx, n - 3] = rnd.NextDouble() * 4.0 - 4.0;
             }
-            
-            //for (int i = 0; i < n; i++)
-            //{
-            //    for (int j = 0; j < n; j++)
-            //    {
-            //        if (!boundary[i, j])
-            //        {
-            //            vx[i, j] += gravityX * dt;
-            //            vy[i, j] += gravityY * dt;
-            //        }
-            //    }
-            //}
+
+            // gravity
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    if (!boundary[i, j])
+                    {
+                        vx[i, j] += gravityX * dt;
+                        vy[i, j] += gravityY * dt;
+                    }
+                }
+            }
         }
 
         public void Step()
