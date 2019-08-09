@@ -13,13 +13,13 @@ namespace Stim.Entities
 
 	class Animate : BaseEntity
 	{
-		public object Propulsion;
-		public object FuelLevel;
-		public object EnergyLevel;
-		public object Replication;
-		public object Excitation;
+		public object Propulsion { get; set; }
+		public object FuelLevel { get; set; }
+        public object EnergyLevel { get; set; }
+        public object Replication { get; set; }
+        public object Excitation { get; set; }
 
-		public object LocalEnvironment;
-		public object GlobalEnvironment;
-	}
+        public object LocalEnvironment { get; set; }
+        public object GlobalEnvironment { get; set; }
+    }
 }

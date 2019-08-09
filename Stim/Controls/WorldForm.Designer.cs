@@ -30,12 +30,12 @@
         {
             this.SuspendLayout();
             // 
-            // World
+            // WorldForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(916, 709);
-            this.Name = "World";
+            this.ClientSize = new System.Drawing.Size(1024, 1024);
+            this.Name = "WorldForm";
             this.Text = "World";
             this.ResumeLayout(false);
 

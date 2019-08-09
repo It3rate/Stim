@@ -29,8 +29,8 @@ namespace Stim.Controls
             //Controls.Add(worldBitmapView);
 
             fluidControl = new FluidControl();
-            fluidControl.Location = new Point(20, 20);
-            fluidControl.Size = new Size(512, 512);
+            fluidControl.Location = new Point(0, 0);
+            fluidControl.Size = new Size(1024, 1024);
 
             FluidSolver solver = new FluidSolver(fluidControl);
             Controls.Add(fluidControl);
