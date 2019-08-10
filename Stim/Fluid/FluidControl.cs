@@ -7,11 +7,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
+
 
 namespace Stim.Fluid
 {
+
     public partial class FluidControl : UserControl
     {
+        [DllImport("shlwapi.dll")]
+        public static extern int ColorHLSToRGB(int H, int L, int S);
+
         public FluidSolver Solver { get; set; }
 
         public int startX;
@@ -21,6 +27,8 @@ namespace Stim.Fluid
         public bool isMoving = false;
         public bool isLeftDown = false;
         public bool isRightDown = false;
+
+        public bool showVelocity = false;
 
         public FluidControl()
         {
@@ -44,7 +52,8 @@ namespace Stim.Fluid
             if (e.Button == MouseButtons.Middle)
             {
                 Solver.boundary[mouseX, mouseY] = true;
-                Solver.dye[mouseX, mouseY] = 0;
+                Solver.dye[mouseX, mouseY, 0] = 0;
+                Solver.dye[mouseX, mouseY, 1] = 0;
                 isRightDown = false;
                 isLeftDown = false;
             }
@@ -79,7 +88,8 @@ namespace Stim.Fluid
             if (e.Button == MouseButtons.Middle)
             {
                 Solver.boundary[mouseX, mouseY] = true;
-                Solver.dye[mouseX, mouseY] = 0;
+                Solver.dye[mouseX, mouseY, 0] = 0;
+                Solver.dye[mouseX, mouseY, 1] = 0;
                 isRightDown = false;
                 isLeftDown = false;
             }
@@ -119,29 +129,41 @@ namespace Stim.Fluid
         private void fluidRender_Paint(object sender, PaintEventArgs e)
         { 
             int i, j;
-            double d;
+            double d0, d1;
             Vector v;
             if ((mouseX != startX) || (mouseY != startY))
             {
                 if (isLeftDown) Solver.vx[mouseX, mouseY] += (mouseX - startX) * 1300.0 * Solver.dw / fluidRender.Width;
                 if (isLeftDown) Solver.vy[mouseX, mouseY] += (mouseY - startY) * 1300.0 * Solver.dw / fluidRender.Height;
             }
-            if (isRightDown) Solver.dye[mouseX, mouseY] += 45.0f;
+            if (isRightDown) Solver.dye[mouseX, mouseY, 0] += Solver.n;
+            if (isLeftDown) Solver.dye[mouseX, mouseY, 1] += Solver.n;
 
             for (i = 0; i < Solver.n; i++)
             {
                 for (j = 0; j < Solver.n; j++)
                 {
-                    d = Solver.dye[i, j] / 10.0;
-                    if (d < 0.0) d = 0.0;
-                    if (d > 1.0) d = 1.0;
                     if (Solver.boundary[i, j])
-                        DrawBoundryBlock(e.Graphics, i, j, 0.0, 0.2, 0.5);
+                    {
+                        DrawBoundryBlock(e.Graphics, i, j, 0, 0, 10);
+                    }
                     else
-                        DrawBoundryBlock(e.Graphics, i, j, d, d, d / 4.0);
-                    v = new Vector(0.5 * (Solver.vx[i, j] + Solver.vx[i + 1, j]),
-                                 0.5 * (Solver.vy[i, j] + Solver.vy[i, j + 1]), 0);
-                    DrawVelocity(e.Graphics, i, j, v, 0.1, 0.0, 0.4);
+                    {
+                        d0 = Solver.dye[i, j, 0] / 10.0;
+                        if (d0 < 0.0) d0 = 0.0;
+                        if (d0 > 1.0) d0 = 1.0;
+                        d1 = Solver.dye[i, j, 1] / 10.0;
+                        if (d1 < 0.0) d1 = 0.0;
+                        if (d1 > 1.0) d1 = 1.0;
+                        DrawBoundryBlock(e.Graphics, i, j, d0, d1, 0);
+                    }
+
+                    if (showVelocity)
+                    {
+                        v = new Vector(0.5 * (Solver.vx[i, j] + Solver.vx[i + 1, j]),
+                                     0.5 * (Solver.vy[i, j] + Solver.vy[i, j + 1]), 0);
+                        DrawVelocity(e.Graphics, i, j, v);
+                    }
                 }
             }
             float pxw = fluidRender.Width / Solver.n;
@@ -151,31 +173,46 @@ namespace Stim.Fluid
                 e.Graphics.FillEllipse(Brushes.White, (float)Solver.animals[i].x * pxw, (float)Solver.animals[i].y * pxh, 10, 10);
             }
         }
-        void DrawBoundryBlock(Graphics gfx, double x, double y, double r, double g, double b)
+        Color blockColor = Color.FromArgb(50, 40, 15);
+        void DrawBoundryBlock(Graphics gfx, double x, double y, double val0, double val1, int type)
         {
-            Pen pen = new Pen(Brushes.Black);
-            pen.Color = Color.FromArgb(255, (int)(r * 255), (int)(g * 255), (int)(b * 255));
-            Brush brush = new SolidBrush(pen.Color);
+            Color c;
+            if (type == 10)
+            {
+                c = blockColor;
+            }
+            else
+            {
+                c = Color.FromArgb(
+                    (int)(Math.Sin(val0 * (Math.PI / 2.0)) * 255),
+                    (int)(Math.Sin(val1 * (Math.PI / 2.0)) * 255),
+                    0);
+            }
+
+            Brush brush = new SolidBrush(c);
             float rx = (float)x / Solver.n * fluidRender.Width;
             float ry = (float)y / Solver.n * fluidRender.Height;
             float w = fluidRender.Width / Solver.n;
             float h = fluidRender.Height / Solver.n;
-            gfx.FillRectangle(brush, rx, ry, w, h);
+            gfx.FillRectangle(brush, rx, ry, (float)Math.Ceiling(w + 0.5), (float)Math.Ceiling(h + 0.5));
         }
 
-        void DrawVelocity(Graphics gfx, double x, double y, Vector v, double r, double g, double b)
+        void DrawVelocity(Graphics gfx, double x, double y, Vector v)
         {
-            Pen pen = new Pen(Brushes.Black);
-            float rx = (float)(x + 0.5f) / Solver.n * fluidRender.Width;
-            float ry = (float)(y + 0.5f) / Solver.n * fluidRender.Height;
-            float w = fluidRender.Width / Solver.n;
-            float h = fluidRender.Height / Solver.n;
-            pen.Color = Color.FromArgb(255,
-                (int)(Math.Min(1.0, Math.Abs(v.x * 40)) * 255),
-                0,
-                (int)(Math.Min(1.0, Math.Abs(v.y * 40)) * 255));//, (int)(b * 255));
+            if (Math.Abs(v.x) + Math.Abs(v.y) > 0.01)
+            {
+                Pen pen = new Pen(Brushes.Black);
+                float rx = (float)(x + 0.5f) / Solver.n * fluidRender.Width;
+                float ry = (float)(y + 0.5f) / Solver.n * fluidRender.Height;
+                float w = fluidRender.Width / Solver.n;
+                float h = fluidRender.Height / Solver.n;
+                pen.Color = Color.FromArgb(255,
+                    (int)(Math.Min(1.0, Math.Abs(v.x * 40)) * 64 + 10),
+                    (int)(Math.Min(1.0, Math.Abs(v.y * 40)) * 64 + 10),
+                    0);//, (int)(b * 255));
 
-            gfx.DrawLine(pen, rx, ry, rx + (float)v.x * 500.0f, ry + (float)v.y * 500.0f);
+                gfx.DrawLine(pen, rx, ry, rx + (float)v.x * 500.0f, ry + (float)v.y * 500.0f);
+            }
         }
         #endregion
     }

@@ -14,12 +14,13 @@ namespace Stim.Fluid
 
         public double[,] vx;
         public double[,] vy;
-        public double[,] dye;
+        public double[,,] dye;
         public double[,] pressure;
         public bool[,] boundary;
 
+        public int dyeCount = 2;
         public double dt = 0.1;
-        public int n = 64;//32;
+        public int n = 150;//32;
         public double visc = 0;//.001;
         public int maxiter = 4; // 120
         public double minerr = 1e-3;
@@ -35,7 +36,7 @@ namespace Stim.Fluid
         private double[,] vxTemp;
         private double[,] vyTemp;
         private double[,] pressureTemp;
-        private double[,] dyeTemp;
+        private double[,,] dyeTemp;
         private const int DOUBLE_SIZE = 8;
 
         public FluidSolver(FluidControl fluidControl)
@@ -75,14 +76,14 @@ namespace Stim.Fluid
         {
             vx = new double[n + 1, n]; 
             vy = new double[n, n + 1];
-            dye = new double[n, n];
+            dye = new double[n, n, dyeCount];
             pressure = new double[n, n];
             boundary = new bool[n, n];
             animals = new Vector[animalCount];
 
             vxTemp = (double[,])vx.Clone();
             vyTemp = (double[,])vy.Clone();
-            dyeTemp = (double[,])dye.Clone();
+            dyeTemp = (double[,,])dye.Clone();
             pressureTemp = (double[,])pressure.Clone();
 
             dw = 1.0 / n;
@@ -100,7 +101,7 @@ namespace Stim.Fluid
 
             for (i = 0; i < animals.Length; i++)
             {
-                animals[i] = new Vector(rnd.Next(n - 4) + 2, rnd.Next(n - 4) + 2, 0);
+                animals[i] = new Vector(rnd.Next(n - 4) + 2, rnd.Next(n - 4) + 2, 0, 0);
             }
         }
 
@@ -191,7 +192,10 @@ namespace Stim.Fluid
             }
             Buffer.BlockCopy(vxTemp, 0, vx, 0, vx.Length * DOUBLE_SIZE);
             Buffer.BlockCopy(vyTemp, 0, vy, 0, vy.Length * DOUBLE_SIZE);
+        }
 
+        public void MoveAnimals()
+        {
             for (int i = 0; i < animals.Length; i++)
             {
                 Vector animal = animals[i];
@@ -199,17 +203,22 @@ namespace Stim.Fluid
                 int ay = Math.Max(0, Math.Min(n - 1, (int)animal.y));
                 double xd = (vx[ax, ay] + vx[ax + 1, ay] + vx[ax - 1, ay] + vx[ax, ay + 1] + vx[ax, ay - 1]) / 5.0;
                 double yd = (vy[ax, ay] + vy[ax + 1, ay] + vy[ax - 1, ay] + vy[ax, ay + 1] + vy[ax, ay - 1]) / 5.0;
-                animal.x += Math.Min(10, xd * 30) + 0.02 * (rnd.NextDouble() - 0.5);
-                animal.y += Math.Min(10, yd * 30) + 0.02 * (rnd.NextDouble() - 0.5);
+                //animal.x += Math.Min(10, xd * 30) + (n / 1000.0) * (rnd.NextDouble() - 0.5);
+                //animal.y += Math.Min(10, yd * 30) + (n / 1000.0) * (rnd.NextDouble() - 0.5);
+                animal.x += (float)(Math.Min(10, xd * 30) + animal.z);
+                animal.y += (float)(Math.Min(10, yd * 30) + animal.w) + (n/1000.0); // slight gravity for animals
+                animal.z += (float)((n / 1000.0) * (rnd.NextDouble() - 0.5));
+                animal.w += (float)((n / 1000.0) * (rnd.NextDouble() - 0.5));
+
                 animal.x = Math.Max(2, Math.Min(n - 3, animal.x));
                 animal.y = Math.Max(2, Math.Min(n - 3, animal.y));
+                animal.z = Math.Max(-.2, Math.Min(.2, animal.z));
+                animal.w = Math.Max(-.2, Math.Min(.2, animal.w));
             }
         }
 
         public void DiffuseDensity()
         {
-            double a = dt * visc;
-            double c = 1 + 4.0f * a;
             double diff = 10.0f;
             double dd;
             int iter = maxiter;
@@ -219,6 +228,8 @@ namespace Stim.Fluid
             Buffer.BlockCopy(dye, 0, dyeTemp, 0, dye.Length * DOUBLE_SIZE);
 
             //gauss seidel
+            double a = dt * visc;
+            double c = 1 + 4.0f * a;
             while ((diff > minerr) && (0 < iter--))
             {
                 diff = 0.0;
@@ -226,16 +237,34 @@ namespace Stim.Fluid
                 {
                     for (int j = 1; j < n - 1; j++)
                     {
-                        dd = dyeTemp[i, j];
-                        temp = (dye[i, j] +
-                            a * (dyeTemp[i - 1, j] +
-                            dyeTemp[i + 1, j] +
-                            dyeTemp[i, j - 1] +
-                            dyeTemp[i, j + 1])) / c;
-                        temp = Math.Min(999, Math.Max(0, temp)) * 0.999;
-                        dyeTemp[i, j] = temp;
-                        dd -= temp;
-                        diff += dd * dd;
+                        for (int dyeType = 0; dyeType < dyeCount; dyeType++)
+                        {
+                            dd = dyeTemp[i, j, dyeType];
+                            temp = (dye[i, j, dyeType] +
+                                a * (dyeTemp[i - 1, j, dyeType] +
+                                dyeTemp[i + 1, j, dyeType] +
+                                dyeTemp[i, j - 1, dyeType] +
+                                dyeTemp[i, j + 1, dyeType])) / c;
+                            temp = Math.Min(999, Math.Max(0, temp));
+                            temp -= n*0.00001; // slowly fade dye based on size (larger is slower)
+                            dyeTemp[i, j, dyeType] = temp;
+                            dd -= temp;
+                            diff += dd * dd;
+                        }
+
+                        // attract to self
+                        double dyeDiff = dyeTemp[i, j, 0] - dyeTemp[i, j, 1];
+                        double inc = Math.Abs(dyeDiff * 0.1);
+                        if ((dyeDiff > 0) && dyeTemp[i, j, 1] > inc)
+                        {
+                            dyeTemp[i, j, 0] += inc;
+                            dyeTemp[i, j, 1] -= inc;
+                        }
+                        else if ((dyeDiff < 0) && dyeTemp[i, j, 0] > inc)
+                        {
+                            dyeTemp[i, j, 0] -= inc;
+                            dyeTemp[i, j, 1] += inc;
+                        }
                     }
                 }
             }
@@ -317,26 +346,31 @@ namespace Stim.Fluid
             double dt0 = dt * idw;
             double temp;
 
-            for (int i = 0; i < n; i++)
+            for (int dyeType = 0; dyeType < dyeCount; dyeType++)
             {
-                for (int j = 0; j < n; j++)
+                for (int i = 0; i < n; i++)
                 {
-                    vix = (vx[i, j] + vx[i + 1, j]) / 2.0;
-                    viy = (vy[i, j] + vy[i, j + 1]) / 2.0;
-                    v = new Vector(vix, viy, 0);
-                    from = new Vector(i, j, 0) - v * dt0;
+                    for (int j = 0; j < n; j++)
+                    {
+                        vix = (vx[i, j] + vx[i + 1, j]) / 2.0;
+                        viy = (vy[i, j] + vy[i, j + 1]) / 2.0;
+                        v = new Vector(vix, viy, 0);
+                        from = new Vector(i, j, 0) - v * dt0;
 
-                    x1 = Clamp((int)from.x, 0, n - 1);
-                    x2 = Clamp(x1 + 1, 0, n - 1);
-                    y1 = Clamp((int)from.y, 0, n - 1);
-                    y2 = Clamp(y1 + 1, 0, n - 1);
-                    
-                    s1 = (double)from.x - x1; s2 = 1.0f - s1;
-                    t1 = (double)from.y - y1; t2 = 1.0f - t1;
-                    temp = t1 * (s1 * dye[x2, y2] + s2 * dye[x1, y2]) +
-                        t2 * (s1 * dye[x2, y1] + s2 * dye[x1, y1]);
-                    temp = Math.Min(99, Math.Max(0, temp));
-                    dyeTemp[i, j] = temp;
+                        x1 = Clamp((int)from.x, 0, n - 1);
+                        x2 = Clamp(x1 + 1, 0, n - 1);
+                        y1 = Clamp((int)from.y, 0, n - 1);
+                        y2 = Clamp(y1 + 1, 0, n - 1);
+
+                        s1 = (double)from.x - x1;
+                        s2 = 1.0f - s1;
+                        t1 = (double)from.y - y1;
+                        t2 = 1.0f - t1;
+                        temp = t1 * (s1 * dye[x2, y2, dyeType] + s2 * dye[x1, y2, dyeType]) +
+                            t2 * (s1 * dye[x2, y1, dyeType] + s2 * dye[x1, y1, dyeType]);
+                        temp = Math.Min(99, Math.Max(0, temp));
+                        dyeTemp[i, j, dyeType] = temp;
+                    }
                 }
             }
             Buffer.BlockCopy(dyeTemp, 0, dye, 0, dye.Length * DOUBLE_SIZE);
@@ -403,17 +437,19 @@ namespace Stim.Fluid
             SetBoundsY(vy);
         }
 
+        int volcanoX = 20;
         public void ApplyExternalForces()
         {
             t += 0.03;
-            vx[13, 13] = (Math.Sin(t)) * 0.2 + 0.15;//rnd.NextDouble() * 0.05 + 0.2;
-            vy[13, 13] = (Math.Cos(t)) * 0.2 + 0.18;// rnd.NextDouble() * 0.05 + 0.175;
+            int loc = (int)(n * 0.4);
+            vx[loc, loc] = (Math.Sin(t)) * (n / 200.0) + 0.15;//rnd.NextDouble() * 0.05 + 0.2;
+            vy[loc, loc] = (Math.Cos(t)) * (n / 200.0) + 0.18;// rnd.NextDouble() * 0.05 + 0.175;
             if (rnd.NextDouble() < 0.1)
             {
-                int rx = rnd.Next((int)(n * 0.8) + (int)(n * 0.1)) + 1;
-                vx[rx, n - 3] = rnd.NextDouble() * 0.5 - 0.15;
-                vy[rx, n - 3] = rnd.NextDouble() * 4.0 - 4.0;
+                volcanoX = rnd.Next((int)(n * 0.8) + (int)(n * 0.1)) + 1;
             }
+            vx[volcanoX, n - 3] += rnd.NextDouble() * (n / 200.0) - (n/400.0);
+            vy[volcanoX, n - 3] += rnd.NextDouble() * (n / -30.0);
 
             // gravity
             for (int i = 0; i < n; i++)
@@ -432,6 +468,7 @@ namespace Stim.Fluid
         public void Step()
         {
             DiffuseVelocity();
+            MoveAnimals();
             Project();
             AdvectVelocity();
             ApplyExternalForces();
