@@ -30,7 +30,7 @@ namespace Stim.Controls
 
             fluidControl = new FluidControl();
             fluidControl.Location = new Point(0, 0);
-            fluidControl.Size = new Size(1024, 1024);
+            fluidControl.Size = this.ClientSize;// new Size(1024, 1024);
 
             FluidSolver solver = new FluidSolver(fluidControl);
             Controls.Add(fluidControl);

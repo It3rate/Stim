@@ -214,6 +214,8 @@ namespace Stim.Fluid
                 animal.y = Math.Max(2, Math.Min(n - 3, animal.y));
                 animal.z = Math.Max(-.2, Math.Min(.2, animal.z));
                 animal.w = Math.Max(-.2, Math.Min(.2, animal.w));
+
+                dye[ax, ay, i % 2] += n/150.0;
             }
         }
 

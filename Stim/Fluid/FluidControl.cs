@@ -18,8 +18,6 @@ namespace Stim.Fluid
         [DllImport("shlwapi.dll")]
         public static extern int ColorHLSToRGB(int H, int L, int S);
 
-        public FluidSolver Solver { get; set; }
-
         public int startX;
         public int startY;
         public int mouseX;
@@ -29,6 +27,24 @@ namespace Stim.Fluid
         public bool isRightDown = false;
 
         public bool showVelocity = false;
+
+        float pixelWidth;
+        float pixelHeight;
+
+        private FluidSolver solver;
+        public FluidSolver Solver
+        {
+            get
+            {
+                return solver;
+            }
+            set
+            {
+                solver = value;
+                pixelWidth = fluidRender.Width / (float)solver.n;
+                pixelHeight = fluidRender.Height / (float)solver.n;
+            }
+        }
 
         public FluidControl()
         {
@@ -44,8 +60,8 @@ namespace Stim.Fluid
         #region Mouse
         private void OnMouseDown(object sender, MouseEventArgs e)
         {
-            startX = (int)(Solver.n * e.X / fluidRender.Width);
-            startY = (int)(Solver.n * e.Y / fluidRender.Height);
+            startX = (int)(e.X / pixelWidth);
+            startY = (int)(e.Y / pixelHeight);
             mouseX = startX;
             mouseY = startY;
 
@@ -81,8 +97,8 @@ namespace Stim.Fluid
         {
             int x = e.X < 0 ? 0 : e.X >= fluidRender.Width ? fluidRender.Width - 1 : e.X;
             int y = e.Y < 0 ? 0 : e.Y >= fluidRender.Height ? fluidRender.Height - 1 : e.Y;
-            mouseX = (int)(Solver.n * x / fluidRender.Width);
-            mouseY = (int)(Solver.n * y / fluidRender.Height);
+            mouseX = (int)(e.X / pixelWidth);
+            mouseY = (int)(e.Y / pixelHeight);
             isMoving = true;
 
             if (e.Button == MouseButtons.Middle)
@@ -114,8 +130,8 @@ namespace Stim.Fluid
 
         private void OnMouseUp(object sender, MouseEventArgs e)
         {
-            startX = (int)(Solver.n * e.X / fluidRender.Width);
-            startY = (int)(Solver.n * e.Y / fluidRender.Height);
+            startX = (int)(e.X / pixelWidth);
+            startY = (int)(e.Y / pixelHeight);
             mouseX = startX;
             mouseY = startY;
             isLeftDown = false;
@@ -166,11 +182,10 @@ namespace Stim.Fluid
                     }
                 }
             }
-            float pxw = fluidRender.Width / Solver.n;
-            float pxh = fluidRender.Height / Solver.n;
+
             for (i = 0; i < Solver.animals.Length; i++)
             {
-                e.Graphics.FillEllipse(Brushes.White, (float)Solver.animals[i].x * pxw, (float)Solver.animals[i].y * pxh, 10, 10);
+                e.Graphics.FillEllipse(Brushes.White, (float)Solver.animals[i].x * pixelWidth, (float)Solver.animals[i].y * pixelHeight, 10, 10);
             }
         }
         Color blockColor = Color.FromArgb(50, 40, 15);
@@ -190,11 +205,9 @@ namespace Stim.Fluid
             }
 
             Brush brush = new SolidBrush(c);
-            float rx = (float)x / Solver.n * fluidRender.Width;
-            float ry = (float)y / Solver.n * fluidRender.Height;
-            float w = fluidRender.Width / Solver.n;
-            float h = fluidRender.Height / Solver.n;
-            gfx.FillRectangle(brush, rx, ry, (float)Math.Ceiling(w + 0.5), (float)Math.Ceiling(h + 0.5));
+            float rx = (float)x * pixelWidth;
+            float ry = (float)y * pixelHeight;
+            gfx.FillRectangle(brush, rx, ry, (float)Math.Ceiling(pixelWidth + 0.5), (float)Math.Ceiling(pixelHeight + 0.5));
         }
 
         void DrawVelocity(Graphics gfx, double x, double y, Vector v)
@@ -202,14 +215,12 @@ namespace Stim.Fluid
             if (Math.Abs(v.x) + Math.Abs(v.y) > 0.01)
             {
                 Pen pen = new Pen(Brushes.Black);
-                float rx = (float)(x + 0.5f) / Solver.n * fluidRender.Width;
-                float ry = (float)(y + 0.5f) / Solver.n * fluidRender.Height;
-                float w = fluidRender.Width / Solver.n;
-                float h = fluidRender.Height / Solver.n;
+                float rx = (float)(x + 0.5f) * pixelWidth;
+                float ry = (float)(y + 0.5f) * pixelHeight;
                 pen.Color = Color.FromArgb(255,
-                    (int)(Math.Min(1.0, Math.Abs(v.x * 40)) * 64 + 10),
-                    (int)(Math.Min(1.0, Math.Abs(v.y * 40)) * 64 + 10),
-                    0);//, (int)(b * 255));
+                    0,
+                    (int)(Math.Min(1.0, Math.Abs(v.x * 40)) * 32),
+                    (int)(Math.Min(1.0, Math.Abs(v.y * 40)) * 64 + 10));//, (int)(b * 255));
 
                 gfx.DrawLine(pen, rx, ry, rx + (float)v.x * 500.0f, ry + (float)v.y * 500.0f);
             }
